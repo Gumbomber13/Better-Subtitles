@@ -4,10 +4,12 @@ Make clean, perfectly-timed SRT subtitles for DaVinci Resolve from your videos �
 
 ### The super simple way
 - Windows: Double‑click `install.bat`
-- Mac/Linux: Run this in Terminal from the project folder:
-  ```bash
-chmod +x install.sh && ./install.sh
-  ```
+- Mac/Linux: Run these in Terminal from the project folder:
+
+```bash
+chmod +x install.sh
+./install.sh
+```
 
 What happens next:
 - The installer sets everything up for you and starts processing automatically.
@@ -15,16 +17,19 @@ What happens next:
 - You can stop anytime with Ctrl+C and run it again later.
 
 ### Using it again later
-- Windows:
-  ```
+Windows:
+
+```powershell
 whisperx-env\Scripts\activate
 python davinci_srt_generator.py
-  ```
-- Mac/Linux:
-  ```bash
+```
+
+Mac/Linux:
+
+```bash
 source whisperx-env/bin/activate
 python davinci_srt_generator.py
-  ```
+```
 
 ### Tips
 - Works with: mp4, mov, mkv, avi, webm, m4v, wmv, flv, 3gp
@@ -33,11 +38,27 @@ python davinci_srt_generator.py
 
 ### If something doesn’t start
 - Windows: try double‑clicking `install.bat` again.
-- Mac/Linux: run `chmod +x install.sh && ./install.sh` again.
+- Mac/Linux: run the two commands again:
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
 - Still nothing? Open a terminal in the folder and run:
-  ```bash
+
+```bash
 python setup_whisperx.py --yes --run
+```
+
+### Check my setup (optional)
+- Windows: double‑click `preflight.bat`
+- Mac/Linux:
+  ```bash
+chmod +x preflight.sh
+./preflight.sh
   ```
+This will check for Python, Git, ffmpeg, and that `whisperx`/`srt` are installed and callable.
 
 ### Change settings (optional)
 - Open `whisperx_config.py` to change model, language, or options like diarization.

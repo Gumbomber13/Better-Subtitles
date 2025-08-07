@@ -83,6 +83,7 @@ def main():
     parser = argparse.ArgumentParser(description="WhisperX Setup Script")
     parser.add_argument("--yes", "-y", action="store_true", help="Run non-interactively and continue past optional prompts")
     parser.add_argument("--run", action="store_true", help="Run the subtitle generator after setup completes")
+    parser.add_argument("--check", action="store_true", help="Run preflight checks and exit (no install)")
     args = parser.parse_args()
 
     print("=" * 50)
@@ -94,10 +95,52 @@ def main():
     if not check_python_version():
         sys.exit(1)
 
-    if not check_git():
+    git_ok = check_git()
+    ffmpeg_ok = check_ffmpeg()
+
+    if args.check:
+        # Library checks in current interpreter
+        print("\n[CHECK] Python packages...")
+        try:
+            import whisperx  # type: ignore
+            print("[OK] whisperx is importable")
+        except Exception as e:
+            print(f"[X] whisperx not importable: {e}")
+            print("    Try: python -m pip install whisperx")
+            whisperx = None  # noqa: F841
+        try:
+            import srt  # type: ignore
+            print("[OK] srt is importable")
+        except Exception as e:
+            print(f"[X] srt not importable: {e}")
+            print("    Try: python -m pip install srt")
+
+        # WhisperX CLI smoke test
+        print("\n[CHECK] WhisperX CLI...")
+        try:
+            res = subprocess.run(["whisperx", "--help"], capture_output=True, text=True)
+            if res.returncode == 0:
+                print("[OK] whisperx CLI is available")
+            else:
+                print(f"[X] whisperx CLI returned {res.returncode}")
+        except FileNotFoundError:
+            print("[X] whisperx command not found (CLI not on PATH)")
+
+        # Optional GPU info
+        detect_gpu()
+
+        # Final advice
+        if not git_ok:
+            print("\n[ADVICE] Install Git: https://git-scm.com/download/win")
+        if not ffmpeg_ok:
+            print("[ADVICE] Install ffmpeg (Windows: winget install ffmpeg)")
+        print("\n[INFO] Preflight check complete.")
+        sys.exit(0)
+
+    if not git_ok:
         sys.exit(1)
 
-    if not check_ffmpeg():
+    if not ffmpeg_ok:
         print("   [WARNING] ffmpeg is required for video processing")
         if not args.yes:
             response = input("   Continue anyway? (y/n): ")
