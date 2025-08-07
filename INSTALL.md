@@ -1,58 +1,67 @@
-# Installation Instructions
+# WhisperX Installation
 
-## Quick Start (Recommended)
+## One-Click Installation (Recommended)
 
-1. Install Python 3.10 from https://www.python.org/downloads/
-2. Install Git from https://git-scm.com/download/win
-3. Install ffmpeg: `winget install ffmpeg`
-4. Run the setup script:
-   ```bash
-   python setup_whisperx.py
-   ```
-
-## Manual Installation
-
-If the setup script doesn't work:
-
-### 1. Create virtual environment
+### Windows
 ```bash
-python -m venv whisperx-env
-whisperx-env\Scripts\activate
+# Double-click or run in Command Prompt:
+install.bat
 ```
 
-### 2. Install PyTorch (choose one)
-
-**For NVIDIA GPU:**
+### Linux/macOS
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# Run in terminal:
+chmod +x install.sh && ./install.sh
 ```
 
-**For CPU only:**
+That's it! The script will:
+- ✅ Check Python 3.10/3.11 installation
+- ✅ Verify Git and ffmpeg prerequisites 
+- ✅ Create virtual environment automatically
+- ✅ Install all dependencies (PyTorch, WhisperX, SRT)
+- ✅ Test the installation
+
+## What You Need First
+
+**All Platforms:**
+- Python 3.10 or 3.11 from https://python.org/downloads/
+- Git from https://git-scm.com/downloads
+
+**Windows:**
+- ffmpeg: `winget install ffmpeg`
+
+**Linux (Ubuntu/Debian):**
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+sudo apt update
+sudo apt install python3 python3-pip python3-venv git ffmpeg
 ```
 
-### 3. Install WhisperX
+**macOS:**
 ```bash
-pip install -r requirements.txt
+brew install python@3.11 git ffmpeg
 ```
+
+## After Installation
+
+Activate the environment and run the subtitle generator:
+```bash
+whisperx-env\\Scripts\\activate   # Windows
+python davinci_srt_generator.py
+
+# macOS/Linux
+source whisperx-env/bin/activate
+python davinci_srt_generator.py
+```
+
+Or place videos in the `input/` folder and run for batch processing.
 
 ## Troubleshooting
 
-### "Git not found"
-Install Git from https://git-scm.com/download/win
+If automatic installation fails, see [INSTALL_MANUAL.md](INSTALL_MANUAL.md) for step-by-step manual instructions.
 
-### "ffmpeg not found"  
-Download from https://www.gyan.dev/ffmpeg/builds/
-Extract and add to PATH
+## What Gets Installed
 
-### GPU not detected
-- Use `float32` instead of `float16` in whisperx_config.py
-- Or install CPU version of PyTorch
-
-### Installation fails
-Try minimal install:
-```bash
-pip install git+https://github.com/m-bain/whisperx.git
-pip install srt
-```
+- **WhisperX**: Advanced speech recognition with word-level timing
+- **PyTorch**: ML framework (GPU or CPU version auto-detected)  
+- **SRT Library**: Subtitle file manipulation
+- **Virtual Environment**: Isolated Python environment in `whisperx-env/`

@@ -30,14 +30,27 @@ This is a WhisperX-based audio transcription project that processes audio/video 
 - Generation of word-level SRT subtitles from WhisperX JSON output
 - Support for multiple output formats (JSON, SRT, TSV, TXT, VTT)
 
-## Python Environment Setup
+## Installation & Setup
 
-This project uses a virtual environment located in `whisperx-env/`:
+**One-Click Installation (Recommended):**
+- **Windows**: Run `install.bat` (double-click or from Command Prompt)
+- **Linux/macOS**: Run `./install.sh` in terminal
+
+The installation scripts automatically:
+- Check Python 3.10/3.11 and prerequisites (Git, ffmpeg)
+- Create virtual environment in `whisperx-env/`
+- Install all dependencies (PyTorch, WhisperX, SRT library)
+- Test the installation
+
+**Manual Installation**: See `INSTALL_MANUAL.md` for step-by-step instructions
 
 **Activate the environment:**
 ```bash
 # Windows
 whisperx-env\Scripts\activate
+
+# Linux/macOS  
+source whisperx-env/bin/activate
 
 # Deactivate
 deactivate

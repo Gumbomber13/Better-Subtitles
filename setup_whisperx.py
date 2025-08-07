@@ -7,19 +7,20 @@ import subprocess
 import sys
 import platform
 import os
+import argparse
 
-def check_python_version():
+def check_python_version() -> bool:
     """Ensure Python 3.10 or 3.11 is being used."""
     version = sys.version_info
     if version.major != 3 or version.minor < 10 or version.minor > 11:
-        print(f"[X] Python {version.major}.{version.minor} detected")
-        print("[OK] Please use Python 3.10 or 3.11")
-        print("   Download from: https://www.python.org/downloads/")
+        print(f"[ERROR] Unsupported Python version detected: {version.major}.{version.minor}")
+        print("        Please use Python 3.10 or 3.11")
+        print("        Download from: https://www.python.org/downloads/")
         return False
     print(f"[OK] Python {version.major}.{version.minor} detected")
     return True
 
-def check_ffmpeg():
+def check_ffmpeg() -> bool:
     """Check if ffmpeg is installed."""
     try:
         subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
@@ -42,44 +43,31 @@ def check_git():
         print("   Download from: https://git-scm.com/download/win")
         return False
 
-def detect_gpu():
-    """Detect if CUDA GPU is available."""
+def detect_gpu() -> bool:
+    """Detect if an NVIDIA CUDA GPU is likely available using nvidia-smi if present."""
     try:
-        import torch
-        if torch.cuda.is_available():
-            print(f"[OK] CUDA GPU detected: {torch.cuda.get_device_name(0)}")
+        result = subprocess.run(["nvidia-smi"], capture_output=True)
+        if result.returncode == 0:
+            print("[OK] NVIDIA GPU detected (nvidia-smi present)")
             return True
-    except ImportError:
+    except FileNotFoundError:
         pass
-    print("[INFO] No CUDA GPU detected - will use CPU")
+    print("[INFO] No NVIDIA GPU detected - will install CPU PyTorch")
     return False
 
 def install_pytorch():
-    """Install appropriate PyTorch version."""
+    """Install appropriate PyTorch version based on GPU detection."""
     print("\n[INSTALL] Installing PyTorch...")
-    
-    # Try to detect if GPU is available
-    has_gpu = False
-    try:
-        # Check for NVIDIA GPU on Windows
-        if platform.system() == "Windows":
-            result = subprocess.run(["nvidia-smi"], capture_output=True, text=True)
-            if result.returncode == 0:
-                has_gpu = True
-                print("   NVIDIA GPU detected - installing CUDA version")
-    except:
-        pass
-    
+    has_gpu = detect_gpu()
     if has_gpu:
-        # Install GPU version
+        print("   Installing CUDA-enabled PyTorch (cu118)")
         subprocess.check_call([
             sys.executable, "-m", "pip", "install",
             "torch", "torchvision", "torchaudio",
             "--index-url", "https://download.pytorch.org/whl/cu118"
         ])
     else:
-        # Install CPU version
-        print("   Installing CPU version of PyTorch")
+        print("   Installing CPU-only PyTorch")
         subprocess.check_call([
             sys.executable, "-m", "pip", "install",
             "torch", "torchvision", "torchaudio",
@@ -92,56 +80,61 @@ def install_requirements():
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     
 def main():
-    print("="*50)
+    parser = argparse.ArgumentParser(description="WhisperX Setup Script")
+    parser.add_argument("--yes", "-y", action="store_true", help="Run non-interactively and continue past optional prompts")
+    args = parser.parse_args()
+
+    print("=" * 50)
     print("WhisperX Setup Script")
-    print("="*50)
-    
+    print("=" * 50)
+
     # Check prerequisites
     print("\n[CHECK] Checking prerequisites...")
     if not check_python_version():
         sys.exit(1)
-    
+
     if not check_git():
         sys.exit(1)
-    
+
     if not check_ffmpeg():
         print("   [WARNING] ffmpeg is required for video processing")
-        response = input("   Continue anyway? (y/n): ")
-        if response.lower() != 'y':
-            sys.exit(1)
-    
+        if not args.yes:
+            response = input("   Continue anyway? (y/n): ")
+            if response.lower() != 'y':
+                sys.exit(1)
+
     # Upgrade pip
     print("\n[INSTALL] Upgrading pip...")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    
+
     # Install PyTorch
     install_pytorch()
-    
+
     # Install requirements
     install_requirements()
-    
+
     # Verify installation
     print("\n[VERIFY] Verifying installation...")
     try:
-        import whisperx
+        import whisperx  # type: ignore
         print("[OK] WhisperX installed successfully")
     except ImportError:
         print("[X] WhisperX installation failed")
         sys.exit(1)
-    
+
     try:
-        import srt
+        import srt  # type: ignore
         print("[OK] SRT module installed successfully")
     except ImportError:
         print("[X] SRT module installation failed")
         sys.exit(1)
-    
-    # Test GPU
+
+    # Report GPU availability
     detect_gpu()
-    
-    print("\n" + "="*50)
+
+    print("\n" + "=" * 50)
     print("[OK] Setup complete!")
-    print("="*50)
+    print("=" * 50)
     print("\nYou can now run:")
     print("  python davinci_srt_generator.py")
     

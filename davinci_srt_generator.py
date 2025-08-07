@@ -327,7 +327,7 @@ class DaVinciSRTGenerator:
             print(f"========================================")
             print(f"Supported formats: {', '.join([ext.replace('*', '') for ext in video_extensions])}")
             print(f"\nTo add videos:")
-            print(f"1. Place video files in the '{input_dir}' folder")
+            print(f"1. Place video files in the '{input_dir}' folder (or 'Input')")
             print(f"2. Run this script again")
             print(f"\nTo process a single video:")
             print(f"python davinci_srt_generator.py --mode video --input your_video.mp4")
@@ -804,7 +804,8 @@ Examples:
             
         elif args.mode == 'folder':
             # Batch folder processing (default)
-            input_dir = args.input or 'input'
+            # Support both 'input' and 'Input' folders out of the box
+            input_dir = args.input or ('input' if Path('input').exists() else ('Input' if Path('Input').exists() else 'input'))
             
             print(f"\n========================================")
             print(f"FOLDER MODE: Batch processing all videos")
