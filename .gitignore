@@ -1,0 +1,44 @@
+# Virtual environment
+whisperx-env/
+venv/
+env/
+
+# Output files
+output/
+input/
+*.srt
+*.json
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.m4v
+*.wmv
+*.flv
+*.3gp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Config with sensitive data
+*_token.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp

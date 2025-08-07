@@ -1,0 +1,11 @@
+# requirements.txt - Minimal dependencies for WhisperX subtitle generation
+
+# Core - WhisperX will pull in its dependencies automatically
+git+https://github.com/m-bain/whisperx.git
+
+# Subtitle generation
+srt>=3.5.0
+
+# Optional but recommended for better performance
+# (WhisperX will install these anyway, but listing for clarity)
+faster-whisper>=1.0.0
