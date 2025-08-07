@@ -19,7 +19,7 @@ That's it! The script will:
 - ✅ Verify Git and ffmpeg prerequisites 
 - ✅ Create virtual environment automatically
 - ✅ Install all dependencies (PyTorch, WhisperX, SRT)
-- ✅ Test the installation
+- ✅ Test the installation and automatically start processing (can be stopped anytime)
 
 ## What You Need First
 

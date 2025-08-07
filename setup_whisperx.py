@@ -82,6 +82,7 @@ def install_requirements():
 def main():
     parser = argparse.ArgumentParser(description="WhisperX Setup Script")
     parser.add_argument("--yes", "-y", action="store_true", help="Run non-interactively and continue past optional prompts")
+    parser.add_argument("--run", action="store_true", help="Run the subtitle generator after setup completes")
     args = parser.parse_args()
 
     print("=" * 50)
@@ -135,8 +136,20 @@ def main():
     print("\n" + "=" * 50)
     print("[OK] Setup complete!")
     print("=" * 50)
-    print("\nYou can now run:")
-    print("  python davinci_srt_generator.py")
+    if args.run:
+        print("\n[RUN] Launching subtitle generator...")
+        # Ensure input and output directories exist
+        try:
+            from pathlib import Path
+            Path("input").mkdir(exist_ok=True)
+            Path("output").mkdir(exist_ok=True)
+        except Exception:
+            pass
+        # Start the default batch processing
+        subprocess.call([sys.executable, "davinci_srt_generator.py"])  # nosec - user project script
+    else:
+        print("\nYou can now run:")
+        print("  python davinci_srt_generator.py")
     
 if __name__ == "__main__":
     main()

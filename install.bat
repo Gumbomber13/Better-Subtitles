@@ -66,8 +66,8 @@ if not exist "whisperx-env" (
 REM Activate venv for this session
 call whisperx-env\Scripts\activate
 
-REM Run the Python setup script non-interactively
-python setup_whisperx.py --yes
+REM Run the Python setup script non-interactively and auto-run the generator
+python setup_whisperx.py --yes --run
 if errorlevel 1 (
     echo.
     echo ========================================

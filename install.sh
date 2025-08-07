@@ -80,8 +80,23 @@ echo "Starting automated setup..."
 echo "========================================"
 echo
 
-# Run the Python setup script
-$PYTHON_CMD setup_whisperx.py
+# Create virtual environment if missing
+if [ ! -d "whisperx-env" ]; then
+  echo "[INFO] Creating virtual environment in whisperx-env"
+  $PYTHON_CMD -m venv whisperx-env
+fi
+
+# Activate the virtual environment
+if [ -f "whisperx-env/bin/activate" ]; then
+  # shellcheck disable=SC1091
+  . whisperx-env/bin/activate
+  PYTHON_CMD="python"
+else
+  print_warning "Could not activate virtual environment; continuing with system Python"
+fi
+
+# Run the Python setup script non-interactively and auto-run the generator
+$PYTHON_CMD setup_whisperx.py --yes --run
 
 if [ $? -ne 0 ]; then
     echo
