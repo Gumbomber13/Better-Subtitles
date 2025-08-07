@@ -2,6 +2,33 @@
 
 Make clean, perfectly-timed SRT subtitles for DaVinci Resolve from your videos — with one click.
 
+### Prerequisites (once per computer)
+- Python 3.10 or 3.11
+- Git
+- ffmpeg
+- Windows: Microsoft Visual C++ Redistributable 2015–2022 (x64)
+
+Windows (PowerShell):
+
+```powershell
+winget install git
+winget install ffmpeg
+winget install Microsoft.VCRedist.2015+.x64
+```
+
+macOS (Homebrew):
+
+```bash
+brew install git ffmpeg python@3.11
+```
+
+Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install python3 python3-pip python3-venv git ffmpeg
+```
+
 ### The super simple way
 - Windows: Double‑click `install.bat`
 - Mac/Linux: Run these in Terminal from the project folder:
