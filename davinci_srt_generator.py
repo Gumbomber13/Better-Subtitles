@@ -113,11 +113,19 @@ class DaVinciSRTGenerator:
         self.EMPHASIS_FRAMES = 6        # Frames to consider word emphasized
         
         # Fixed millisecond values (not frame-dependent)
-        self.overlap_ms = 10            # Small overlap between subtitles
-        self.max_gap_ms = 500           # Max gap for word grouping
+        self.overlap_ms = 0             # No overlap to prevent issues
+        self.max_gap_ms = 300           # Max gap for word grouping (tightened)
         
         # DaVinci Resolve separator configuration
         self.SEPARATOR = " "  # Normal space - should work now that cache is cleared
+        
+        # Dual-threshold min duration config
+        self.FLASH_WORDS = {
+            "a","an","the","to","of","in","on","at","for","and","or","but",
+            "uh","um","hmm","like","so","ya","yeah","nah","ok","okay","mm"
+        }
+        self.SOFT_MIN_MS = 360.0   # readable floor (~0.36s)
+        self.HARD_MIN_MS = 120.0   # flash exception (~0.12s)
         
         # Will be calculated once fps is known
         self.frame_duration_ms = None
@@ -136,7 +144,8 @@ class DaVinciSRTGenerator:
         # Convert frame counts to milliseconds
         self.phrase_gap_threshold_ms = self.PHRASE_GAP_FRAMES * self.frame_duration_ms
         self.extension_ms = self.EXTENSION_FRAMES * self.frame_duration_ms
-        self.min_duration_ms = self.MIN_DURATION_FRAMES * self.frame_duration_ms
+        # Keep frame-based min but never below SOFT_MIN_MS baseline
+        self.min_duration_ms = max(self.MIN_DURATION_FRAMES * self.frame_duration_ms, self.SOFT_MIN_MS)
         self.emphasis_duration_ms = self.EMPHASIS_FRAMES * self.frame_duration_ms
         
         if not self.quiet:
@@ -283,19 +292,24 @@ class DaVinciSRTGenerator:
             # Step 1: Run WhisperX
             json_path = self.run_whisperx(video_path, output_dir)
             
-            # Step 2: Generate DaVinci-optimized SRT
+            # Step 2: Generate DaVinci-optimized SRT (per speaker if available)
             video_name = Path(video_path).stem
-            output_srt = Path(output_dir) / f"{video_name}_davinci.srt"
+            speaker_out_dir = Path(output_dir) / video_name
+            speaker_out_dir.mkdir(parents=True, exist_ok=True)
             
-            print(f"\nGenerating DaVinci-optimized subtitles...")
-            self.process_file(json_path, str(output_srt))
+            print(f"\nGenerating DaVinci-optimized subtitles (per speaker if available)...")
+            written = self.process_file_multi(json_path, speaker_out_dir, video_name)
+            
+            print("\nWrote files:")
+            for w in written:
+                print("  ", w)
             
             print(f"\n========================================")
             print(f"COMPLETED: {Path(video_path).name}")
-            print(f"Output: {output_srt}")
+            print(f"Output directory: {speaker_out_dir}")
             print(f"========================================")
             
-            return str(output_srt)
+            return written
             
         except Exception as e:
             print(f"\n========================================")
@@ -348,10 +362,10 @@ class DaVinciSRTGenerator:
         for i, video_path in enumerate(video_files, 1):
             try:
                 print(f"\n[{i}/{len(video_files)}] Processing: {Path(video_path).name}")
-                output_srt = self.process_video(video_path, output_dir)
+                output_srts = self.process_video(video_path, output_dir)
                 results.append({
                     'video': video_path,
-                    'srt': output_srt,
+                    'srts': output_srts,
                     'status': 'success'
                 })
                 successful += 1
@@ -375,8 +389,9 @@ class DaVinciSRTGenerator:
             for result in results:
                 if result['status'] == 'success':
                     video_name = Path(result['video']).name
-                    srt_name = Path(result['srt']).name
-                    print(f"  [OK] {video_name} -> {srt_name}")
+                    for srt in result['srts']:
+                        srt_name = Path(srt).name
+                        print(f"  [OK] {video_name} -> {srt_name}")
         
         if failed > 0:
             print(f"\nFailed files:")
@@ -395,6 +410,18 @@ class DaVinciSRTGenerator:
     
     def ms_to_next_frame_boundary(self, ms):
         """Convert milliseconds to next frame boundary (always rounds up)."""
+        import math
+        frame_number = math.ceil(ms / self.frame_duration_ms)
+        return frame_number * self.frame_duration_ms
+
+    def ms_to_start_boundary(self, ms):
+        """Floor milliseconds to frame boundary for starts."""
+        import math
+        frame_number = math.floor(ms / self.frame_duration_ms)
+        return frame_number * self.frame_duration_ms
+
+    def ms_to_end_boundary(self, ms):
+        """Ceil milliseconds to frame boundary for ends."""
         import math
         frame_number = math.ceil(ms / self.frame_duration_ms)
         return frame_number * self.frame_duration_ms
@@ -442,7 +469,8 @@ class DaVinciSRTGenerator:
                     words.append({
                         "text": word["word"].strip(),
                         "start_ms": word["start"] * 1000.0,
-                        "end_ms": word["end"] * 1000.0
+                        "end_ms": word["end"] * 1000.0,
+                        "speaker": segment.get("speaker", "SPEAKER_1")
                     })
         
         print(f"Extracted {len(words)} words from WhisperX JSON")
@@ -484,7 +512,11 @@ class DaVinciSRTGenerator:
             
             # Check if we can group with next word
             can_group = False
-            if i + 1 < len(words):
+            
+            # Enforce solo for long words
+            if len(current_text.rstrip('.!?;:,—–-')) >= 8:
+                can_group = False
+            elif i + 1 < len(words):
                 next_word = words[i + 1]
                 next_text = next_word["text"]
                 
@@ -530,7 +562,7 @@ class DaVinciSRTGenerator:
                     can_group = False
                 elif current_emphasized or next_emphasized:
                     can_group = False
-                elif gap_ms > self.max_gap_ms:
+                elif gap_ms > self.max_gap_ms:  # Now 300ms instead of 500ms
                     can_group = False
                 elif next_is_capitalized:
                     can_group = False
@@ -549,7 +581,8 @@ class DaVinciSRTGenerator:
                     "end_ms": next_word["end_ms"],
                     "original_start": current_word["start_ms"],
                     "original_end": next_word["end_ms"],
-                    "word_count": 2
+                    "word_count": 2,
+                    "speaker": current_word.get("speaker", "SPEAKER_1")
                 }
                 groups.append(group)
                 i += 2  # Skip next word since we grouped it
@@ -561,7 +594,8 @@ class DaVinciSRTGenerator:
                     "end_ms": current_word["end_ms"],
                     "original_start": current_word["start_ms"],
                     "original_end": current_word["end_ms"],
-                    "word_count": 1
+                    "word_count": 1,
+                    "speaker": current_word.get("speaker", "SPEAKER_1")
                 }
                 groups.append(group)
                 i += 1  # Move to next word
@@ -576,21 +610,30 @@ class DaVinciSRTGenerator:
         
         return groups
 
+    def min_duration_for(self, text, next_gap_ms, word_count):
+        """Determine minimum duration based on content and context."""
+        # Only allow flash for very short, single-word filler, in tight flow
+        tokens = [t.strip(",.!?:;—–-") for t in text.lower().split()]
+        is_single = (word_count == 1)
+        short_chars = len("".join(tokens)) <= 6
+        all_filler = tokens and all(t in self.FLASH_WORDS for t in tokens)
+        tight_flow = (next_gap_ms is not None and next_gap_ms < 180)
+        ends_with_stop = text.strip().endswith(('.', '!', '?'))
+        if is_single and short_chars and all_filler and tight_flow and not ends_with_stop:
+            return self.HARD_MIN_MS
+        return self.SOFT_MIN_MS
+
     def create_seamless_timings(self, groups):
-        """Core logic to adjust timings with overlaps for DaVinci Resolve."""
+        """Core logic to adjust timings with no overlaps for DaVinci Resolve."""
         if not groups:
             return []
 
         processed_groups = []
         
         for i, group in enumerate(groups):
-            # Start with frame-aligned original timing
-            start_ms = self.seconds_to_frame_boundary(group["start_ms"] / 1000.0)
-            end_ms = self.seconds_to_frame_boundary(group["end_ms"] / 1000.0)
-            
-            # Ensure minimum duration
-            if end_ms - start_ms < self.min_duration_ms:
-                end_ms = start_ms + self.min_duration_ms
+            # Start with frame-aligned original timing using floor for starts, ceil for ends
+            start_ms = self.ms_to_start_boundary(group["start_ms"])
+            end_ms = self.ms_to_end_boundary(group["end_ms"])
             
             # Handle timing with next group
             gap_based_end_ms = None
@@ -598,38 +641,40 @@ class DaVinciSRTGenerator:
             
             if i + 1 < len(groups):
                 next_group = groups[i + 1]
-                next_start_ms = self.seconds_to_frame_boundary(next_group["start_ms"] / 1000.0)
-                
                 # Calculate gap between ORIGINAL timings
-                original_end_ms = group["end_ms"]
-                original_next_start_ms = next_group["start_ms"]
-                gap_ms = original_next_start_ms - original_end_ms
+                gap_ms = next_group["start_ms"] - group["end_ms"]
+                next_start_ms = self.ms_to_start_boundary(next_group["start_ms"])
                 
-                # Apply gap-based rules FIRST
+                # Apply gap-based rules
                 gap_based_end_ms = self.apply_gap_based_rules(group, next_group, gap_ms)
-                
                 if gap_based_end_ms is not None:
-                    end_ms = self.ms_to_frame_boundary(gap_based_end_ms)
-                elif gap_ms <= self.max_gap_ms:  # Use existing overlap logic
-                    overlap_end_ms = next_start_ms + self.overlap_ms
-                    end_ms = self.ms_to_next_frame_boundary(overlap_end_ms)
-                    
-                    # Ensure we don't create unreasonably long subtitle
-                    if end_ms - start_ms > 3000:  # 3 second max
-                        end_ms = start_ms + 3000
-                else:
-                    # Very large gap: keep original timing but frame-align
-                    end_ms = self.seconds_to_frame_boundary(group["end_ms"] / 1000.0)
+                    end_ms = self.ms_to_end_boundary(gap_based_end_ms)
+                
+                # Enforce dual-threshold min duration
+                needed_min = self.min_duration_for(group["text"], gap_ms, group["word_count"])
+                if end_ms - start_ms < needed_min:
+                    end_ms = start_ms + needed_min
+                
+                # Hard no-overlap clamp (1 frame before next start)
+                max_allowed_end = next_start_ms - self.frame_duration_ms
+                if end_ms > max_allowed_end:
+                    end_ms = max_allowed_end
+                
+                # Keep 3s cap
+                if end_ms - start_ms > 3000:
+                    end_ms = start_ms + 3000
             else:
-                # Last group: frame-align the original end time
-                end_ms = self.seconds_to_frame_boundary(group["end_ms"] / 1000.0)
+                # Last cue: respect min
+                needed_min = self.min_duration_for(group["text"], None, group["word_count"])
+                if end_ms - start_ms < needed_min:
+                    end_ms = start_ms + needed_min
             
             # Track timing strategy
             if i + 1 < len(groups):
                 if gap_based_end_ms is not None:
                     timing_strategy = "phrase_boundary"
                 else:
-                    timing_strategy = "seamless_overlap"
+                    timing_strategy = "no_overlap"  # Changed from "seamless_overlap"
             else:
                 timing_strategy = "last_group"
             
@@ -641,11 +686,50 @@ class DaVinciSRTGenerator:
                 "original_end": group["original_end"],
                 "word_count": group["word_count"],
                 "timing_strategy": timing_strategy,
-                "original_gap": gap_ms if i + 1 < len(groups) else None
+                "original_gap": gap_ms if i + 1 < len(groups) else None,
+                "speaker": group.get("speaker", "SPEAKER_1")
             })
         
         return processed_groups
 
+    def split_words_by_speaker(self, words):
+        """Split words by speaker, keeping order."""
+        by_spk = {}
+        for w in words:
+            spk = w.get("speaker", "SPEAKER_1")
+            by_spk.setdefault(spk, []).append(w)
+        return by_spk
+    
+    def process_file_multi(self, json_path, speaker_out_dir, video_stem):
+        """Process JSON file with multi-speaker support."""
+        words = self.process_whisperx_json(json_path)
+        if not words:
+            print("No words found in input file!")
+            return []
+        
+        # Detect diarization presence
+        has_speaker = any('speaker' in w for w in words)
+        outputs = []
+        
+        if has_speaker or (globals().get('USE_DIARIZATION', False)):
+            buckets = self.split_words_by_speaker(words)
+            print(f"Detected speakers: {', '.join(sorted(buckets.keys()))}")
+            for spk, spk_words in buckets.items():
+                groups = self.group_words(spk_words)
+                processed = self.create_seamless_timings(groups)
+                out_path = Path(speaker_out_dir) / f"{video_stem}_{spk.lower()}.srt"
+                self.generate_srt(processed, str(out_path))
+                outputs.append(str(out_path))
+        else:
+            # Single-track fallback, but still inside the video folder
+            groups = self.group_words(words)
+            processed = self.create_seamless_timings(groups)
+            out_path = Path(speaker_out_dir) / f"{video_stem}_davinci.srt"
+            self.generate_srt(processed, str(out_path))
+            outputs.append(str(out_path))
+        
+        return outputs
+    
     def generate_srt(self, groups, output_path):
         """Write properly formatted SRT file with placeholder if dialogue doesn't start at 0:00."""
         srt_subtitles = []
@@ -702,28 +786,24 @@ class DaVinciSRTGenerator:
             print(f"Overlapping subtitles: {overlaps}/{len(groups)-1} ({overlaps/(len(groups)-1)*100:.1f}%)")
 
     def process_file(self, json_path, output_path):
-        """Main processing function."""
+        """Main processing function for backward compatibility (single file mode)."""
         print(f"Processing: {json_path}")
         
-        # Extract words from WhisperX JSON
-        words = self.process_whisperx_json(json_path)
+        # For JSON mode, create folder based on json filename
+        json_stem = Path(json_path).stem
+        output_dir = Path(output_path).parent / json_stem
+        output_dir.mkdir(parents=True, exist_ok=True)
         
-        if not words:
-            print("No words found in input file!")
-            return
+        # Use multi-speaker processing
+        outputs = self.process_file_multi(json_path, output_dir, json_stem)
         
-        # Group words into phrases
-        groups = self.group_words(words)
+        if outputs:
+            print(f"\n[SUCCESS] Generated DaVinci Resolve compatible SRT:")
+            print(f"  Input:  {json_path}")
+            for out in outputs:
+                print(f"  Output: {out}")
         
-        # Apply DaVinci-specific timing adjustments
-        processed_groups = self.create_seamless_timings(groups)
-        
-        # Generate SRT file
-        self.generate_srt(processed_groups, output_path)
-        
-        print(f"\n[SUCCESS] Generated DaVinci Resolve compatible SRT:")
-        print(f"  Input:  {json_path}")
-        print(f"  Output: {output_path}")
+        return outputs
 
 
 def main():
@@ -777,13 +857,13 @@ Examples:
                 sys.exit(1)
             
             input_file = args.input
-            output_file = str(Path(args.output) / f"{Path(input_file).stem}_davinci.srt")
+            # Process file will create appropriate folder structure
             
             print(f"\n========================================")
             print(f"JSON MODE: Processing existing WhisperX JSON")
             print(f"========================================")
             
-            generator.process_file(input_file, output_file)
+            generator.process_file(input_file, args.output)
             
         elif args.mode == 'video':
             # Single video processing
